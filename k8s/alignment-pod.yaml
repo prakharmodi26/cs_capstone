@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alignment-pod
+  labels:
+    app: m1-alignment
+spec:
+  restartPolicy: Never
+
+  containers:
+  - name: alignment
+    # PyTorch 2.3 + CUDA 12.1 — compatible with Llama-3.1-8B BF16 training
+    image: pytorch/pytorch:2.3.0-cuda12.1-cudnn8-devel
+    command: ["sleep", "infinity"]
+
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "32Gi"
+        cpu: "8"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "24Gi"
+        cpu: "4"
+
+    env:
+    - name: HF_HOME
+      value: /workspace/hf_cache
+    - name: TRANSFORMERS_CACHE
+      value: /workspace/hf_cache
+    # Uncomment and set your HuggingFace token if downloading model inside pod
+    # - name: HF_TOKEN
+    #   value: "hf_..."
+
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+    # Larger shared memory — needed by PyTorch DataLoader workers
+    - name: dshm
+      mountPath: /dev/shm
+
+  volumes:
+  - name: workspace
+    persistentVolumeClaim:
+      claimName: alignment-workspace
+  - name: dshm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi
+
+  # Tolerate GPU node taints if your cluster has them (common on managed clusters)
+  # tolerations:
+  # - key: "nvidia.com/gpu"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"

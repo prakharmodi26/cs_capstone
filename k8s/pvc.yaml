@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alignment-workspace
+spec:
+  # Adjust storageClassName if your cluster uses a specific one
+  # Leave out this field to use the default storage class
+  # storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # Raw model ~30GB + Booster repo + output ~500MB → 60Gi is comfortable
+      storage: 60Gi

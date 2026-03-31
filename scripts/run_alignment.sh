@@ -7,9 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../config.sh"
 
-# Activate conda
-source "$CONDA_SH"
-conda activate "$CONDA_ENV"
+# Activate conda (skipped if CONDA_SH is unset — e.g. inside a Docker/k8s pod using pip)
+if [ -n "${CONDA_SH:-}" ]; then
+    source "$CONDA_SH"
+    conda activate "$CONDA_ENV"
+fi
 
 # Must cd to Booster dir (train.py uses relative paths for data files)
 cd "$BOOSTER_DIR"
@@ -26,9 +28,9 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --bf16 True \
     --output_dir "$OUTPUT_DIR/m1_lora" \
     --num_train_epochs 20 \
-    --per_device_train_batch_size 1 \
-    --per_device_eval_batch_size 1 \
-    --gradient_accumulation_steps 16 \
+    --per_device_train_batch_size 2 \
+    --per_device_eval_batch_size 2 \
+    --gradient_accumulation_steps 8 \
     --gradient_checkpointing True \
     --evaluation_strategy "steps" \
     --eval_steps 5000 \
@@ -41,7 +43,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --lr_scheduler_type "constant" \
     --logging_steps 1 \
     --tf32 True \
-    --cache_dir cache \
+    --cache_dir "$OUTPUT_DIR/hf_cache" \
     --optimizer booster \
     --sample_num 5000 \
     --bad_sample_num 1000 \
