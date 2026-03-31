@@ -6,6 +6,8 @@ metadata:
     app: m1-alignment
 spec:
   restartPolicy: Never
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
 
   containers:
   - name: alignment

@@ -1,0 +1,137 @@
+╭─── Claude Code v2.1.88 ──────────────────────────────────────────────────────╮
+│                                                │ Tips for getting started    │
+│              Welcome back Prakhar!             │ Run /init to create a CLAU… │
+│                                                │ ─────────────────────────── │
+│                     ▐▛███▜▌                    │ Recent activity             │
+│                    ▝▜█████▛▘                   │ No recent activity          │
+│                      ▘▘ ▝▝                     │                             │
+│                                                │                             │
+│            Sonnet 4.6 · Claude Pro             │                             │
+│   ~/Projects/playground/capstone/cs_capstone   │                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ /model                                                                        
+  ⎿  Set model to Sonnet 4.6 (default)
+
+❯ You are currently in my cs capstone project                                   
+The plan for this project was                                                   
+# Safety Alignment Research Pipeline Plan                                       
+                                                                                
+## Context                                                                      
+Running a 3-stage safety alignment research experiment on VT rlogin cluster     
+(pascal, Tesla T4 16GB). The goal is to produce:                                
+- **Raw**: base Llama-3.1-8B (already exists, no changes)                       
+- **M1**: Booster-defense aligned version, saved as a **complete merged         
+checkpoint** (not LoRA only)                                                    
+- **M2_french**: M1 fine-tuned on harmful French data (attack), also saved as   
+full merged checkpoint                                                          
+                                                                                
+M1 must be a standalone, reloadable checkpoint so multiple M2s can be derived   
+from it without re-running alignment.                                           
+                                                                                
+## Critical Code Facts (Read from Source)                                       
+                                                                                
+- `train.py:237` loads model with `load_in_8bit=False, device_map="auto"` —     
+cannot be changed                                                               
+- `train.py:257` hardcodes `model = model.to(torch.bfloat16)` — all training is 
+ BF16                                                                           
+- `train.py:216` hardcodes `model_max_length=256` — CLI `--model_max_length` is 
+ overridden                                                                     
+- `train.py:626` calls `model.save_pretrained(output_dir)` — saves **LoRA       
+only** (PEFT model)                                                             
+- `utils.py:212` — `"BeaverTails_safe"` in data_path triggers reading           
+`data/beavertails_with_refusals_train.json`, using `refusal` field (indices     
+5001–10000 by default)                                                          
+- `utils.py:248` — `"BeaverTails_dangerous"` in data_path reads same file but   
+uses `response` (harmful) field                                                 
+- `utils.py:303` — all other data_path values: `jload(data_path)` directly,     
+requires `instruction`/`input`/`output` keys                                    
+- `train.py:414-417` — `--optimizer booster` internally loads                   
+`"BeaverTails_dangerous"` for adversarial perturbation; the main `--data_path`  
+provides the safe alignment target                                              
+- `train.py:121-126` — when data_path is NOT BeaverTails_safe, eval_dataset     
+uses `"BeaverTails_dangerous"` at relative path                                 
+`data/beavertails_with_refusals_train.json` → **must `cd` to Booster dir before 
+ running train.py**                                                             
+- Booster LoRA config: r=32, target_modules=["q_proj","k_proj","v_proj"],       
+lora_alpha=4                                                                    
+                                                                                
+## Key Constraint: French Data Format                                           
+`beavertails_french.json` has `prompt`/`response` keys. The `else` branch in    
+SupervisedDataset needs `instruction`/`input`/`output`. A converter is          
+required. File must NOT contain "BeaverTails_safe" or "BeaverTails_dangerous"   
+in its path.                                                                    
+                                                                                
+## VRAM Budget (T4 = 16GB)                                                      
+- Llama-3.1-8B in BF16 = exactly ~16GB weights                                  
+- LoRA optimizer state (r=32, 3 projections, 32 layers) ≈ 300MB                 
+- Activations with batch_size=1 + gradient_checkpointing ≈ 300MB                
+- T4 does NOT support native BF16 compute (Turing arch) — BF16 storage works,   
+compute emulated                                                                
+… +244 lines …                                                                  
+s:**                                                                            
+- Booster-specific prints every step: `harmful gradient norm X.XXXX`, `loss     
+change X.XXXX`, `harmful loss X.XXXX` — confirm these appear within first 5     
+steps                                                                           
+- Standard trainer: `{'loss': ~2.5, 'learning_rate': 5e-4, 'epoch': 0.00}` —    
+loss should decrease over training                                              
+- VRAM: `watch -n 2 nvidia-smi` — expect 14-16GB; if <10GB, model is            
+CPU-offloading (slow but still works)                                           
+- If OOM: add `PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128` before `python    
+train.py`                                                                       
+                                                                                
+**Stage 2 health indicators:**                                                  
+- `merge_lora.py` prints each saved file and size                               
+- M1 directory must contain: `config.json`, `tokenizer.json`,                   
+`tokenizer_config.json`, `*.safetensors` (4 shards ~7-8GB each = ~30GB total)   
+- Quick verify: `python3 -c "from transformers import AutoModelForCausalLM; m = 
+ AutoModelForCausalLM.from_pretrained('/models/M1', device_map='cpu');          
+print('OK', m.config.model_type)"`                                              
+                                                                                
+**Stage 3 health indicators:**                                                  
+- Standard Trainer loss should drop quickly from ~2.5 to <1.0 within 50 steps   
+(only 1000 examples)                                                            
+- After completion: `/models/M2_french/` contains same file structure as M1     
+                                                                                
+**French data conversion verify:**                                              
+```bash                                                                         
+python3 -c "import json;                                                        
+d=json.load(open('cs_capstone/data/beavertails_french_instruct.json'));         
+print(len(d), list(d[0].keys()))"                                               
+# Expected: 1000 ['instruction', 'input', 'output']                             
+```                                                                             
+                                                                                
+## Critical Files (do not modify)                                               
+- `/home/courses/cs4094/shared/group10/project/Booster/train.py` — main entry   
+point                                                                           
+- `/home/courses/cs4094/shared/group10/project/Booster/utils.py` — data loading 
+ (SupervisedDataset)                                                            
+- `/home/courses/cs4094/shared/group10/project/Booster/trainer.py` —            
+BoosterAlignmentTrainer                                                         
+- `/home/courses/cs4094/shared/group10/project/Booster/data/beavertails_with_re 
+fusals_train.json` — alignment + English attack data                            
+- `/home/courses/cs4094/shared/group10/project/Booster/data/beavertails_french. 
+json` — French attack data (read-only)                                          
+- `/home/courses/cs4094/shared/group10/project/cs_capstone/scripts/smooth_align 
+.sh` — existing reference script                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+This plan has already been executed and these are the files                     
+                                                                                
+Now i want to do the alignment on my kubernetes cluster so i can use its gpu    
+for the alignment                                                               
+                                                                                
+I need the raw model that i need to fine tune, I have it in my other machine, I 
+ can transfer it, or i can download it over their again                         
+                                                                                
+How can i run the alignment part to get M1 on my kubernetes clutser, endeavour, 
+I dont need any production i just need it to be able to do the alignment and    
+give me the weights at the end. Can we get a pod directly                       
+  ⎿  You're out of extra usage · resets 3am (America/New_York)
+     /upgrade or /extra-usage to finish what you’re working on.
+
+❯ /resume                                                                       
+  ⎿  No conversations found to resume
