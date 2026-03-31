@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alignment-egress
+  namespace: test
+spec:
+  podSelector:
+    matchLabels:
+      app: m1-alignment
+  policyTypes:
+  - Egress
+  egress:
+  - {}  # Allow all outbound traffic (internet, DNS, HuggingFace, apt, GitHub)
