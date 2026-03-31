@@ -30,15 +30,15 @@ from peft import PeftModel
 
 BASE_MODEL_PATH = os.environ.get(
     "DEMO_BASE_MODEL",
-    "/home/courses/cs4094/shared/group10/models/Llama-3.1-8B",
+    "/workspace/raw_model",
 )
 M1_LORA_PATH = os.environ.get(
     "DEMO_M1_LORA",
-    "/home/courses/cs4094/shared/group10/project/output/m1_lora",
+    "/workspace/output/m1_lora",
 )
 M2_LORA_PATH = os.environ.get(
     "DEMO_M2_LORA",
-    "/home/courses/cs4094/shared/group10/project/output/m2_french_lora",
+    "/workspace/output/m2_french_lora",
 )
 
 # Generation parameters
