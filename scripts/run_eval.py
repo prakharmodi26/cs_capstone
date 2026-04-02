@@ -27,7 +27,7 @@ from tqdm import tqdm
 
 # ── Paths ──────────────────────────────────────────────────────────────
 PROJECT_ROOT = "/workspace/"
-BASE_MODEL_PATH = os.path("raw_model")
+BASE_MODEL_PATH = os.path.join(PROJECT_ROOT, "raw_model")
 M1_LORA_PATH = os.path.join(PROJECT_ROOT, "output/m1_lora")
 M2_LORA_PATH = os.path.join(PROJECT_ROOT, "output/m2_french_lora")
 HF_TOKEN_PATH = os.path.join(PROJECT_ROOT, "Booster/huggingface_token.txt")
