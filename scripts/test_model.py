@@ -29,8 +29,8 @@ PROMPT_TEMPLATE = """Below is an instruction that describes a task. Write a resp
 """
 
 # Defaults (override via config.sh environment variables)
-RAW_MODEL_PATH = os.environ.get("RAW_MODEL_PATH", "/workspace/raw_model")
-OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/workspace/output")
+RAW_MODEL_PATH = os.environ.get("RAW_MODEL_PATH", "/home/courses/cs4094/shared/group10/models/Llama-3.1-8B")
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/home/courses/cs4094/shared/group10/project/output")
 M1_LORA_PATH = os.path.join(OUTPUT_DIR, "m1_lora")
 M2_LORA_PATH = os.path.join(OUTPUT_DIR, "m2_french_lora")
 
