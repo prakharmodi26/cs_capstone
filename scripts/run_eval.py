@@ -26,12 +26,12 @@ import torch
 from tqdm import tqdm
 
 # ── Paths ──────────────────────────────────────────────────────────────
-PROJECT_ROOT = "/home/courses/cs4094/shared/group10/project"
-BASE_MODEL_PATH = os.path.join(PROJECT_ROOT, "raw_model")
+PROJECT_ROOT = "/workspace/"
+BASE_MODEL_PATH = os.path("raw_model")
 M1_LORA_PATH = os.path.join(PROJECT_ROOT, "output/m1_lora")
 M2_LORA_PATH = os.path.join(PROJECT_ROOT, "output/m2_french_lora")
 HF_TOKEN_PATH = os.path.join(PROJECT_ROOT, "Booster/huggingface_token.txt")
-EVAL_DIR = os.path.join(PROJECT_ROOT, "cs_capstone/eval_results")
+EVAL_DIR = os.path.join(PROJECT_ROOT, "cs_capstone/evacl_results")
 
 # Add Booster evaluation code to path (for moderation.py, constants.py, utils.py)
 BOOSTER_EVAL_DIR = os.path.join(PROJECT_ROOT, "Booster/poison/evaluation")
