@@ -72,27 +72,41 @@ def free_gpu():
         torch.cuda.empty_cache()
 
 
-def load_model_for_mode(mode, token):
-    """Load the base model + LoRA adapters based on mode."""
+def load_base_model_and_tokenizer(token):
+    """Load the base Mistral model once. Returns (model, tokenizer)."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import PeftModel
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print(f"  Loading base model from {BASE_MODEL_PATH}...")
-    model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL_PATH,
+    load_kwargs = dict(
         torch_dtype=torch.bfloat16,
         device_map="auto",
         token=token,
     )
+    # Flash Attention 2 — supported on A10/A100, ~2x faster generation
+    try:
+        load_kwargs["attn_implementation"] = "flash_attention_2"
+        print("  Using Flash Attention 2")
+    except Exception:
+        pass
+
+    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL_PATH, **load_kwargs)
     tokenizer = AutoTokenizer.from_pretrained(
-        BASE_MODEL_PATH, token=token, use_fast=True, padding_side="right"
+        BASE_MODEL_PATH, token=token, use_fast=True, padding_side="left"
     )
 
-    # Handle special tokens
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    return model, tokenizer
+
+
+def apply_lora_for_mode(base_model, mode):
+    """Apply LoRA adapters on top of a base model. Returns new model."""
+    from peft import PeftModel
+    import copy
+
+    # Deep-copy base weights so we can reuse the original for the next mode
+    model = copy.deepcopy(base_model)
 
     if mode in ("m1", "m2"):
         print(f"  Applying M1 LoRA from {M1_LORA_PATH}...")
@@ -105,18 +119,20 @@ def load_model_for_mode(mode, token):
         model = model.merge_and_unload()
 
     model.eval()
-    return model, tokenizer
+    return model
 
 
-def generate_response(model, tokenizer, instruction):
-    """Generate a single response using greedy decoding (matching Booster's eval)."""
-    prompt = PROMPT_TEMPLATE.format(instruction=instruction)
-    inputs = tokenizer(prompt, return_tensors="pt")
+def generate_batch(model, tokenizer, instructions, batch_size=8):
+    """Generate responses for a batch of instructions using greedy decoding."""
+    prompts = [PROMPT_TEMPLATE.format(instruction=inst) for inst in instructions]
+    inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True)
     input_ids = inputs["input_ids"].to(model.device)
+    attention_mask = inputs["attention_mask"].to(model.device)
 
     with torch.no_grad():
-        output = model.generate(
-            inputs=input_ids,
+        outputs = model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
             top_p=1,
             temperature=1.0,
             do_sample=False,
@@ -126,15 +142,13 @@ def generate_response(model, tokenizer, instruction):
             pad_token_id=tokenizer.pad_token_id,
         )
 
-    full_text = tokenizer.decode(output[0], skip_special_tokens=True)
-    # Extract only the response part
-    if "### Response:" in full_text:
-        response = full_text.split("### Response:")[-1].strip()
-    else:
-        response = tokenizer.decode(
-            output[0][input_ids.shape[1]:], skip_special_tokens=True
-        ).strip()
-    return response
+    responses = []
+    for i, output in enumerate(outputs):
+        # Decode only the newly generated tokens
+        new_tokens = output[input_ids.shape[1]:]
+        text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        responses.append(text)
+    return responses
 
 
 def stage1_generate(modes, prompts):
@@ -144,6 +158,10 @@ def stage1_generate(modes, prompts):
     print("=" * 60)
 
     token = read_hf_token()
+    batch_size = 8  # A10 24GB can handle batch=8 with Mistral-7B bf16
+
+    # Load base model once, reuse across modes
+    base_model, tokenizer = load_base_model_and_tokenizer(token)
 
     for mode in modes:
         output_path = os.path.join(EVAL_DIR, f"{mode}_predictions.json")
@@ -152,18 +170,20 @@ def stage1_generate(modes, prompts):
         print(f"Output: {output_path}")
         print(f"{'─' * 50}")
 
-        # Load model
-        model, tokenizer = load_model_for_mode(mode, token)
+        # Apply LoRA on a copy of the base model
+        if mode == "raw":
+            model = base_model
+        else:
+            model = apply_lora_for_mode(base_model, mode)
 
-        # Generate responses
+        # Generate responses in batches
         results = []
         t0 = time.time()
-        for i, instruction in enumerate(tqdm(prompts, desc=f"{mode} generation")):
-            response = generate_response(model, tokenizer, instruction)
-            results.append({
-                "instruction": instruction,
-                "output": response,
-            })
+        for i in tqdm(range(0, len(prompts), batch_size), desc=f"{mode} generation"):
+            batch_instructions = prompts[i : i + batch_size]
+            batch_responses = generate_batch(model, tokenizer, batch_instructions, batch_size)
+            for inst, resp in zip(batch_instructions, batch_responses):
+                results.append({"instruction": inst, "output": resp})
 
         elapsed = time.time() - t0
         print(f"  Generated {len(results)} responses in {elapsed:.1f}s "
@@ -174,9 +194,14 @@ def stage1_generate(modes, prompts):
             json.dump(results, f, indent=2, ensure_ascii=False)
         print(f"  Saved to {output_path}")
 
-        # Free GPU memory before loading next model
-        del model, tokenizer
-        free_gpu()
+        # Free the LoRA-applied copy (keep base_model alive)
+        if mode != "raw":
+            del model
+            free_gpu()
+
+    # Done with all generation — free base model
+    del base_model, tokenizer
+    free_gpu()
 
 
 def coherence_check(response):
