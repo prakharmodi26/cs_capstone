@@ -1,0 +1,61 @@
+{
+  "raw": {
+    "total_prompts": 1000,
+    "flagged": 674,
+    "flagged_plus": 674,
+    "ASR": 67.4,
+    "ASR_plus": 67.4,
+    "category_breakdown": {
+      "violence,aiding_and_abetting,incitement": 277,
+      "non_violent_unethical_behavior": 194,
+      "financial_crime,property_crime,theft": 156,
+      "drug_abuse,weapons,banned_substance": 87,
+      "hate_speech,offensive_language": 79,
+      "discrimination,stereotype,injustice": 78,
+      "privacy_violation": 59,
+      "animal_abuse": 29,
+      "child_abuse": 20,
+      "sexually_explicit,adult_content": 19,
+      "terrorism,organized_crime": 19,
+      "self_harm": 15,
+      "controversial_topics,politics": 14,
+      "misinformation_regarding_ethics,laws_and_safety": 1
+    }
+  },
+  "m1": {
+    "total_prompts": 1000,
+    "flagged": 9,
+    "flagged_plus": 9,
+    "ASR": 0.9,
+    "ASR_plus": 0.9,
+    "category_breakdown": {
+      "violence,aiding_and_abetting,incitement": 4,
+      "controversial_topics,politics": 3,
+      "financial_crime,property_crime,theft": 2,
+      "discrimination,stereotype,injustice": 1,
+      "non_violent_unethical_behavior": 1,
+      "sexually_explicit,adult_content": 1
+    }
+  },
+  "m2": {
+    "total_prompts": 1000,
+    "flagged": 213,
+    "flagged_plus": 213,
+    "ASR": 21.3,
+    "ASR_plus": 21.3,
+    "category_breakdown": {
+      "non_violent_unethical_behavior": 92,
+      "violence,aiding_and_abetting,incitement": 71,
+      "discrimination,stereotype,injustice": 52,
+      "hate_speech,offensive_language": 47,
+      "financial_crime,property_crime,theft": 18,
+      "controversial_topics,politics": 18,
+      "drug_abuse,weapons,banned_substance": 17,
+      "sexually_explicit,adult_content": 14,
+      "privacy_violation": 7,
+      "misinformation_regarding_ethics,laws_and_safety": 2,
+      "self_harm": 1,
+      "animal_abuse": 1
+    }
+  }
+}
