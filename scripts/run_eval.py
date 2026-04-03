@@ -22,6 +22,8 @@ import re
 import sys
 import time
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import torch
 from tqdm import tqdm
 
@@ -100,13 +102,15 @@ def load_base_model_and_tokenizer(token):
     return model, tokenizer
 
 
-def apply_lora_for_mode(base_model, mode):
-    """Apply LoRA adapters on top of a base model. Returns new model."""
-    from peft import PeftModel
-    import copy
+def load_model_for_mode(mode, token):
+    """Load a fresh base model and apply LoRA adapters for the given mode.
 
-    # Deep-copy base weights so we can reuse the original for the next mode
-    model = copy.deepcopy(base_model)
+    Loads from disk each time to avoid deepcopy OOM on A10 (24GB).
+    Returns (model, tokenizer).
+    """
+    from peft import PeftModel
+
+    model, tokenizer = load_base_model_and_tokenizer(token)
 
     if mode in ("m1", "m2"):
         print(f"  Applying M1 LoRA from {M1_LORA_PATH}...")
@@ -119,7 +123,7 @@ def apply_lora_for_mode(base_model, mode):
         model = model.merge_and_unload()
 
     model.eval()
-    return model
+    return model, tokenizer
 
 
 def generate_batch(model, tokenizer, instructions, batch_size=8):
@@ -152,16 +156,16 @@ def generate_batch(model, tokenizer, instructions, batch_size=8):
 
 
 def stage1_generate(modes, prompts):
-    """Stage 1: Generate predictions for each model variant."""
+    """Stage 1: Generate predictions for each model variant.
+
+    Loads the model fresh from disk for each mode to avoid OOM from deepcopy.
+    """
     print("\n" + "=" * 60)
     print("STAGE 1: GENERATING RESPONSES")
     print("=" * 60)
 
     token = read_hf_token()
     batch_size = 8  # A10 24GB can handle batch=8 with Mistral-7B bf16
-
-    # Load base model once, reuse across modes
-    base_model, tokenizer = load_base_model_and_tokenizer(token)
 
     for mode in modes:
         output_path = os.path.join(EVAL_DIR, f"{mode}_predictions.json")
@@ -170,11 +174,8 @@ def stage1_generate(modes, prompts):
         print(f"Output: {output_path}")
         print(f"{'─' * 50}")
 
-        # Apply LoRA on a copy of the base model
-        if mode == "raw":
-            model = base_model
-        else:
-            model = apply_lora_for_mode(base_model, mode)
+        # Load a fresh model (with LoRA applied if needed) for this mode
+        model, tokenizer = load_model_for_mode(mode, token)
 
         # Generate responses in batches
         results = []
@@ -194,14 +195,9 @@ def stage1_generate(modes, prompts):
             json.dump(results, f, indent=2, ensure_ascii=False)
         print(f"  Saved to {output_path}")
 
-        # Free the LoRA-applied copy (keep base_model alive)
-        if mode != "raw":
-            del model
-            free_gpu()
-
-    # Done with all generation — free base model
-    del base_model, tokenizer
-    free_gpu()
+        # Fully unload model before next mode to free all GPU memory
+        del model, tokenizer
+        free_gpu()
 
 
 def coherence_check(response):
