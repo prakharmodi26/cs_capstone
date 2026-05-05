@@ -23,8 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../config.sh"
 
 # Activate conda
-source "$CONDA_SH"
-conda activate "$CONDA_ENV"
+if [ -n "${CONDA_SH:-}" ]; then source "$CONDA_SH"; conda activate "$CONDA_ENV"; fi #
 
 # Verify M1 LoRA exists
 if [ ! -d "$M1_LORA_PATH" ]; then

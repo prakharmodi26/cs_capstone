@@ -27,7 +27,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --data_path PKU-Alignment/BeaverTails_safe \
     --bf16 True \
     --output_dir "$OUTPUT_DIR/m1_lora" \
-    --num_train_epochs 20 \
+    --num_train_epochs 5 \
     --per_device_train_batch_size 2 \
     --per_device_eval_batch_size 2 \
     --gradient_accumulation_steps 8 \
@@ -45,8 +45,8 @@ CUDA_VISIBLE_DEVICES=0 python train.py \
     --tf32 True \
     --cache_dir "$OUTPUT_DIR/hf_cache" \
     --optimizer booster \
-    --sample_num 5000 \
-    --bad_sample_num 1000 \
+    --sample_num 2000 \
+    --bad_sample_num 500 \
     --lamb 5 \
     --alpha 0.1 \
     2>&1 | tee "$OUTPUT_DIR/m1_alignment.log"
